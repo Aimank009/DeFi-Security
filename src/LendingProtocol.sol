@@ -157,4 +157,14 @@ contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
 
         emit Liquidated(msg.sender, _user, userDebt, collateralToSeize);
     }
+
+    function getCollateral(
+        address _user
+    ) external view override returns (uint256) {
+        return collateral[_user];
+    }
+
+    function getDebt(address _user) external view override returns (uint256) {
+        return debt[_user];
+    }
 }
