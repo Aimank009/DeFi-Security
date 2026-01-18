@@ -32,6 +32,8 @@ contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
         stableCoin = IERC20(_stableCoin);
     }
 
+    receive() external payable {}
+
     function depositCollateral() external payable override nonReentrant {
         if (msg.value == 0) revert InsufficientCollateral();
         collateral[msg.sender] += msg.value;
@@ -40,30 +42,37 @@ contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
 
     function _calculateHealthFactor(
         address _user,
+        uint256 _collateralValue,
         uint256 _debtAmount
     ) internal view returns (uint256) {
         if (_debtAmount == 0) return type(uint256).max;
-
-        uint256 collateralValue = (collateral[_user] *
-            oracle.getPrice(address(0))) / 1e18;
         return
-            (collateralValue * LIQUIDATION_THRESHOLD * HEALTH_PRECISION) /
+            (_collateralValue * LIQUIDATION_THRESHOLD * HEALTH_PRECISION) /
             (_debtAmount * PRECISION);
     }
 
     function getHealthFactor(
         address _user
     ) public view override returns (uint256) {
-        return _calculateHealthFactor(_user, debt[_user]);
+        return
+            _calculateHealthFactor(
+                _user,
+                (collateral[_user] * oracle.getPrice(address(0))) / 1e18,
+                debt[_user]
+            );
     }
 
     function borrow(uint256 _amount) external override nonReentrant {
-        if (msg.sender == address(0)) revert InvalidAddress();
         if (_amount == 0) revert ZeroAmount();
 
         uint256 newDebt = debt[msg.sender] + _amount;
-        if (_calculateHealthFactor(msg.sender, newDebt) < HEALTH_PRECISION)
-            revert HealthFactorBelowOne();
+        if (
+            _calculateHealthFactor(
+                msg.sender,
+                (collateral[msg.sender] * oracle.getPrice(address(0))) / 1e18,
+                newDebt
+            ) < HEALTH_PRECISION
+        ) revert HealthFactorBelowOne();
 
         debt[msg.sender] = newDebt;
         bool success = stableCoin.transfer(msg.sender, _amount);
@@ -88,5 +97,64 @@ contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
         debt[msg.sender] -= repayAmount;
 
         emit Repaid(msg.sender, repayAmount);
+    }
+
+    function withdrawCollateral(
+        uint256 _amount
+    ) external override nonReentrant {
+        if (_amount == 0) revert ZeroAmount();
+        if (collateral[msg.sender] < _amount) revert InsufficientCollateral();
+
+        uint256 newCollateral = collateral[msg.sender] - _amount;
+        if (debt[msg.sender] > 0) {
+            uint256 projectedHealth = _calculateHealthFactor(
+                msg.sender,
+                (newCollateral * oracle.getPrice(address(0))) / 1e18,
+                debt[msg.sender]
+            );
+            if (projectedHealth < HEALTH_PRECISION)
+                revert HealthFactorBelowOne();
+        }
+
+        collateral[msg.sender] = newCollateral;
+
+        (bool success, ) = payable(msg.sender).call{value: _amount}("");
+        if (!success) revert TransferFailed();
+
+        emit CollateralWithdrawn(msg.sender, _amount);
+    }
+
+    function liquidate(address _user) external override nonReentrant {
+        if (getHealthFactor(_user) >= HEALTH_PRECISION)
+            revert HealthFactorAboveOne();
+
+        uint256 userDebt = debt[_user];
+        uint256 userCollateral = collateral[_user];
+
+        uint256 ethPrice = oracle.getPrice(address(0));
+        uint256 collateralToSeize = (userDebt *
+            1e18 *
+            (PRECISION + LIQUIDATION_BONUS)) / (ethPrice * PRECISION);
+
+        if (collateralToSeize > userCollateral) {
+            collateralToSeize = userCollateral;
+        }
+
+        bool success = stableCoin.transferFrom(
+            msg.sender,
+            address(this),
+            userDebt
+        );
+        if (!success) revert TransferFailed();
+
+        debt[_user] = 0;
+        collateral[_user] -= collateralToSeize;
+
+        (bool ethSuccess, ) = payable(msg.sender).call{
+            value: collateralToSeize
+        }("");
+        if (!ethSuccess) revert TransferFailed();
+
+        emit Liquidated(msg.sender, _user, userDebt, collateralToSeize);
     }
 }
