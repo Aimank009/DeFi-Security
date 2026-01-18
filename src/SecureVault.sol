@@ -39,4 +39,33 @@ contract SecureVault is
 
         emit Withdrawn(msg.sender, userBalance);
     }
+
+    function flashLoan(
+        uint256 _amount,
+        address _receiver,
+        bytes calldata _data
+    ) external override nonReentrant {
+        if (_amount == 0) revert ZeroAmount();
+        if (_amount > address(this).balance) revert InsufficientBalance();
+        uint256 balanceBefore = address(this).balance;
+        uint256 fee = (_amount * FLASH_LOAN_FEE) / FEE_PRECISION;
+
+        (bool sent, ) = payable(_receiver).call{value: _amount}("");
+        if (!sent) revert FlashLoanFailed();
+        bool success = IFlashLoanReceiver(_receiver).executeOperation(
+            _amount,
+            fee,
+            msg.sender,
+            _data
+        );
+        if (!success) revert FlashLoanFailed();
+        if (address(this).balance < balanceBefore + fee)
+            revert FlashLoanFailed();
+        emit FlashLoan(_receiver, address(0), _amount, fee);
+    }
+    function getBalance(
+        address _user
+    ) external view override returns (uint256) {
+        return balances[_user];
+    }
 }
