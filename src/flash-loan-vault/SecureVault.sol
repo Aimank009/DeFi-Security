@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./interfaces/ISecureVault.sol";
-import "./interfaces/IFlashLoanReceiver.sol";
-import "./events/VaultEvents.sol";
-import "./events/FlashLoanEvents.sol";
+import "../interfaces/ISecureVault.sol";
+import "../interfaces/IFlashLoanReceiver.sol";
+import "../events/VaultEvents.sol";
+import "../events/FlashLoanEvents.sol";
 
 contract SecureVault is
     ISecureVault,

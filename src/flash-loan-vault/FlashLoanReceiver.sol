@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./interfaces/IFlashLoanReceiver.sol";
-import "./interfaces/ISecureVault.sol";
+import "../interfaces/IFlashLoanReceiver.sol";
+import "../interfaces/ISecureVault.sol";
 
 contract FlashLoanReceiver is IFlashLoanReceiver {
     address public vault;

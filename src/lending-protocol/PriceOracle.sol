@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./interfaces/IPriceOracle.sol";
-import "./events/OracleEvents.sol";
+import "../interfaces/IPriceOracle.sol";
+import "../events/OracleEvents.sol";
 
 contract PriceOracle is IPriceOracle, Ownable, OracleEvents {
     mapping(address => uint256) public price;
@@ -18,8 +18,8 @@ contract PriceOracle is IPriceOracle, Ownable, OracleEvents {
         address _token,
         uint256 _price
     ) external override onlyOwner {
-        if (_token == address(0)) revert InvalidToken();
         uint256 oldPrice = price[_token];
+
         price[_token] = _price;
 
         if (!supportedToken[_token]) {

@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./interfaces/ILendingProtocol.sol";
-import "./interfaces/IPriceOracle.sol";
-import "./events/LendingEvents.sol";
+import "../interfaces/ILendingProtocol.sol";
+import "../interfaces/IPriceOracle.sol";
+import "../events/LendingEvents.sol";
 
 contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
     uint256 public constant LTV = 75;
