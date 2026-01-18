@@ -71,4 +71,22 @@ contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
 
         emit Borrowed(msg.sender, _amount);
     }
+
+    function repay(uint256 _amount) external override nonReentrant {
+        if (_amount == 0) revert ZeroAmount();
+
+        uint256 repayAmount = _amount > debt[msg.sender]
+            ? debt[msg.sender]
+            : _amount;
+        bool success = stableCoin.transferFrom(
+            msg.sender,
+            address(this),
+            repayAmount
+        );
+        if (!success) revert TransferFailed();
+
+        debt[msg.sender] -= repayAmount;
+
+        emit Repaid(msg.sender, repayAmount);
+    }
 }
