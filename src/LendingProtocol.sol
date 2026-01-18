@@ -21,13 +21,37 @@ contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
     mapping(address => uint256) public debt;
 
     error InsufficientCollateral();
+    error InvalidAddress();
     error HealthFactorBelowOne();
     error HealthFactorAboveOne();
     error TransferFailed();
     error ZeroAmount();
 
     constructor(address _oracleAddress, address _stableCoin) {
-        oracle = _oracleAddress;
-        stableCoin = _stableCoin;
+        oracle = IPriceOracle(_oracleAddress);
+        stableCoin = IERC20(_stableCoin);
+    }
+
+    function depositCollateral() external payable override nonReentrant {
+        if (msg.value == 0) revert InsufficientCollateral();
+        collateral[msg.sender] += msg.value;
+        emit CollateralDeposited(msg.sender, msg.value);
+    }
+
+    function getHealthFactor(
+        address _user
+    ) public view override returns (uint256) {
+        if (_user == address(0)) revert InvalidAddress();
+
+        uint256 collateralValue = (collateral[_user] *
+            oracle.getPrice(address(0))) / 1e18;
+        uint256 debtValue = debt[_user];
+        if (debtValue == 0) return type(uint256).max;
+
+        uint256 healthFactor = (collateralValue *
+            LIQUIDATION_THRESHOLD *
+            HEALTH_PRECISION) / (debtValue * 100);
+
+        return healthFactor;
     }
 }
