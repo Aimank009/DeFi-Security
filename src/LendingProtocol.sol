@@ -38,20 +38,37 @@ contract LendingProtocol is ILendingProtocol, LendingEvents, ReentrancyGuard {
         emit CollateralDeposited(msg.sender, msg.value);
     }
 
-    function getHealthFactor(
-        address _user
-    ) public view override returns (uint256) {
-        if (_user == address(0)) revert InvalidAddress();
+    function _calculateHealthFactor(
+        address _user,
+        uint256 _debtAmount
+    ) internal view returns (uint256) {
+        if (_debtAmount == 0) return type(uint256).max;
 
         uint256 collateralValue = (collateral[_user] *
             oracle.getPrice(address(0))) / 1e18;
-        uint256 debtValue = debt[_user];
-        if (debtValue == 0) return type(uint256).max;
+        return
+            (collateralValue * LIQUIDATION_THRESHOLD * HEALTH_PRECISION) /
+            (_debtAmount * PRECISION);
+    }
 
-        uint256 healthFactor = (collateralValue *
-            LIQUIDATION_THRESHOLD *
-            HEALTH_PRECISION) / (debtValue * 100);
+    function getHealthFactor(
+        address _user
+    ) public view override returns (uint256) {
+        return _calculateHealthFactor(_user, debt[_user]);
+    }
 
-        return healthFactor;
+    function borrow(uint256 _amount) external override nonReentrant {
+        if (msg.sender == address(0)) revert InvalidAddress();
+        if (_amount == 0) revert ZeroAmount();
+
+        uint256 newDebt = debt[msg.sender] + _amount;
+        if (_calculateHealthFactor(msg.sender, newDebt) < HEALTH_PRECISION)
+            revert HealthFactorBelowOne();
+
+        debt[msg.sender] = newDebt;
+        bool success = stableCoin.transfer(msg.sender, _amount);
+        if (!success) revert TransferFailed();
+
+        emit Borrowed(msg.sender, _amount);
     }
 }
